@@ -10,6 +10,7 @@ OpiFacts is a command-line utility that makes it easy to upload files to your Gi
 - Manages SSH authentication for secure GitHub access
 - Outputs a direct URL to access your uploaded content
 - Easy installation to your system PATH
+- Self-update capability to get the latest version
 
 ## Requirements
 
@@ -60,7 +61,8 @@ When you first run OpiFacts, it will guide you through a one-time setup process:
 1. Specify your GitHub website repository path (local directory)
 2. Enter your GitHub username
 3. Provide your website URL (e.g., https://yourdomain.com)
-4. Choose whether to install the script to your PATH
+4. Set the URL for script updates (or accept the default)
+5. Choose whether to install the script to your PATH
 
 The setup process will also:
 - Create an "opifacts" folder in your repository (if it doesn't exist)
@@ -89,9 +91,17 @@ Files are now available at:
 https://yourdomain.com/opifacts/a1b2c3d4e5f6g7h8i9j0
 ```
 
-### Update Repository
+### Pull Repository Changes
 
 To pull the latest changes from your GitHub repository:
+
+```bash
+opifacts pull
+```
+
+### Update OpiFacts
+
+To update the OpiFacts script itself to the latest version:
 
 ```bash
 opifacts update
@@ -122,6 +132,8 @@ OpiFacts stores its configuration in `~/.opifacts_config.json`. This includes:
 - Your GitHub username
 - Your website URL
 - The subfolder name for uploads (default: "opifacts")
+- The location where the script is installed
+- The URL for script updates
 
 ## Troubleshooting
 
@@ -147,6 +159,15 @@ If the installation to PATH fails:
 1. Make sure the target directory exists
 2. Check that you have write permissions to the directory
 3. For system directories (/usr/local/bin, /usr/bin), you need sudo access
+
+### Update Issues
+
+If the self-update fails:
+
+1. Check your internet connection
+2. Verify that the update URL is correct in your configuration
+3. Ensure you have write permissions to the script location
+4. If the script is installed in a system directory, you may need sudo access
 
 ## License
 
