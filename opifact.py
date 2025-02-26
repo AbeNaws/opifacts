@@ -58,9 +58,13 @@ def copy_files_to_repo(sources):
         # Git commands
         subprocess.run(["git", "add", "."], check=True)
         subprocess.run(["git", "commit", "-m", f"Add files to {os.path.basename(dest_folder)}"], check=True)
-        subprocess.run(["git", "push"], check=True)
         
-        print("Successfully pushed changes to GitHub")
+        # Use SSH for pushing (assumes SSH key is properly set up)
+        env = os.environ.copy()
+        env["GIT_SSH_COMMAND"] = "ssh -i ~/.ssh/github_key -o IdentitiesOnly=yes"
+        subprocess.run(["git", "push"], check=True, env=env)
+        
+        print("Successfully pushed changes to GitHub using SSH key")
     except subprocess.CalledProcessError as e:
         print(f"Error during git operations: {e}")
         sys.exit(1)
