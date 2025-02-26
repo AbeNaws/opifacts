@@ -47,7 +47,7 @@ DEFAULT_CONFIG = {
     "WEBSITE_URL": "",             # Your website URL (e.g., https://abenaws.dev)
     "OPIFACTS_SUBFOLDER": "opifacts",  # Subfolder name within the repo for uploaded content
     "SCRIPT_LOCATION": "",         # Where the script is installed (set during installation)
-    "SCRIPT_UPDATE_URL": "https://raw.githubusercontent.com/AbeNaws/OpiFacts/main/opifacts", # Update source
+    "SCRIPT_UPDATE_URL": "https://raw.githubusercontent.com/AbeNaws/opifacts/main/opifacts.py", # Update source
     "setup_completed": False       # Flag to track if setup has been completed
 }
 
@@ -116,7 +116,7 @@ def install_script(bin_dir, needs_sudo):
         return False
 
 def update_script():
-    """Update the OpiFacts script to the latest version"""
+    """Update the opifacts script to the latest version"""
     script_location = CONFIG.get("SCRIPT_LOCATION", "")
     update_url = CONFIG.get("SCRIPT_UPDATE_URL", "")
     
@@ -130,7 +130,7 @@ def update_script():
         print("Please set the SCRIPT_UPDATE_URL in your config file (~/.opifacts_config.json)")
         return False
     
-    print(f"Updating OpiFacts from: {update_url}")
+    print(f"Updating opifacts from: {update_url}")
     print(f"Current script location: {script_location}")
     
     try:
@@ -155,7 +155,7 @@ def update_script():
             print("Updating script...")
             shutil.move(temp_file, script_location)
         
-        print("OpiFacts has been successfully updated!")
+        print("Opifacts has been successfully updated!")
         return True
     except Exception as e:
         print(f"Error updating script: {e}")
@@ -239,7 +239,7 @@ def guided_setup():
     config["setup_completed"] = True
     save_config(config)
     
-    print("\nSetup completed! You can now use OpiFacts to upload files.")
+    print("\nSetup completed! You can now use opifacts to upload files.")
     print(f"Run: ./opifacts.py file1.txt folder1 ...")
     print(f"Or (if installed to PATH): opifacts file1.txt folder1 ...")
     
@@ -447,7 +447,7 @@ def main():
     
     # Check if setup is completed
     if not CONFIG["setup_completed"]:
-        print("OpiFacts hasn't been set up yet.")
+        print("Opifacts hasn't been set up yet.")
         user_input = input("Would you like to run the setup now? (y/n): ")
         if user_input.lower() == 'y':
             CONFIG = guided_setup()
@@ -460,7 +460,7 @@ def main():
         print("Usage:")
         print("  ./opifacts.py <file1> <file2> ... <folder1> ...")
         print("  ./opifacts.py pull       (pull latest changes from repository)")
-        print("  ./opifacts.py update     (update the OpiFacts script)")
+        print("  ./opifacts.py update     (update the Opifacts script)")
         print("  ./opifacts.py setup      (run setup again)")
         sys.exit(1)
         
