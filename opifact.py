@@ -1,33 +1,201 @@
 #!/usr/bin/env python3
+"""
+OpiFacts - File Upload Utility for GitHub-hosted websites
+
+SETUP INSTRUCTIONS:
+1. Make this script executable:
+   chmod +x opifacts.py
+
+2. Run the script for the first time to set up configuration:
+   ./opifacts.py setup
+
+3. To upload files or folders:
+   ./opifacts.py file1.txt folder1 file2.jpg ...
+   or, if installed to PATH:
+   opifacts file1.txt folder1 file2.jpg ...
+
+4. To update your repository:
+   ./opifacts.py update
+   or:
+   opifacts update
+
+The script will copy the files to a uniquely named folder in your repository,
+commit the changes, and push them to GitHub. It will output a public URL
+where you can access the files.
+"""
+
 import os
 import sys
 import shutil
 import time
 import hashlib
 import subprocess
+import json
 from pathlib import Path
 
-# Configuration
-GITHUB_REPO_PATH = "/home/lincoln/Programs/opifacts/"  # Change this to your actual repo path
-GITHUB_USERNAME = "your-github-username"  # Add your GitHub username here
+# Configuration - these will be set during first-time setup
+CONFIG_FILE = os.path.expanduser("~/.opifacts_config.json")
+DEFAULT_CONFIG = {
+    "GITHUB_REPO_PATH": "",        # Path to your GitHub repository
+    "GITHUB_USERNAME": "",         # Your GitHub username
+    "WEBSITE_URL": "",             # Your website URL (e.g., https://abenaws.dev)
+    "OPIFACTS_SUBFOLDER": "opifacts",  # Subfolder name within the repo for uploaded content
+    "setup_completed": False       # Flag to track if setup has been completed
+}
+
+# Load configuration
+def load_config():
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            print(f"Error reading config file. Using default configuration.")
+            return DEFAULT_CONFIG.copy()
+    return DEFAULT_CONFIG.copy()
+
+# Save configuration
+def save_config(config):
+    with open(CONFIG_FILE, 'w') as f:
+        json.dump(config, f, indent=4)
+    # Make sure only the user can read the file (contains personal paths)
+    os.chmod(CONFIG_FILE, 0o600)
+
+# Global config object
+CONFIG = load_config()
+
+def get_bin_directories():
+    """Get a list of available bin directories for installing the script"""
+    bin_dirs = []
+    
+    # User bin directory (no sudo required)
+    user_bin = os.path.expanduser("~/.local/bin")
+    if os.path.exists(user_bin):
+        bin_dirs.append((user_bin, False))  # (path, needs_sudo)
+    
+    # System bin directories (require sudo)
+    system_bins = ["/usr/local/bin", "/usr/bin"]
+    for path in system_bins:
+        if os.path.exists(path):
+            bin_dirs.append((path, True))  # (path, needs_sudo)
+    
+    return bin_dirs
+
+def install_script(bin_dir, needs_sudo):
+    """Install the script to the bin directory with the name 'opifacts'"""
+    current_script = os.path.abspath(sys.argv[0])
+    destination = os.path.join(bin_dir, "opifacts")
+    
+    try:
+        if needs_sudo:
+            print(f"Installing to {destination} (requires sudo)...")
+            subprocess.run(["sudo", "cp", current_script, destination], check=True)
+            subprocess.run(["sudo", "chmod", "+x", destination], check=True)
+        else:
+            print(f"Installing to {destination}...")
+            shutil.copy2(current_script, destination)
+            os.chmod(destination, 0o755)  # Make executable
+        
+        print(f"Successfully installed 'opifacts' to {bin_dir}")
+        print("You can now run the script using just 'opifacts' command")
+        return True
+    except Exception as e:
+        print(f"Error installing script: {e}")
+        return False
+
+def guided_setup():
+    """Interactive setup process for first-time users"""
+    print("Welcome to OpiFacts Setup!")
+    print("This will guide you through the configuration process.\n")
+    
+    config = CONFIG.copy()
+    
+    # GitHub repo path
+    while True:
+        repo_path = input(f"Enter the full path to your GitHub repository: ").strip()
+        if os.path.exists(repo_path) and os.path.isdir(repo_path):
+            config["GITHUB_REPO_PATH"] = repo_path
+            break
+        else:
+            print(f"Error: The path '{repo_path}' does not exist or is not a directory. Please try again.")
+    
+    # GitHub username
+    config["GITHUB_USERNAME"] = input("Enter your GitHub username: ").strip()
+    
+    # Website URL
+    while True:
+        website_url = input("Enter your website URL (e.g., https://abenaws.dev): ").strip()
+        if website_url.startswith(("http://", "https://")):
+            config["WEBSITE_URL"] = website_url.rstrip('/')
+            break
+        else:
+            print("Error: URL must start with http:// or https://")
+    
+    # Create opifacts subfolder in the repository if it doesn't exist
+    opifacts_path = os.path.join(config["GITHUB_REPO_PATH"], config["OPIFACTS_SUBFOLDER"])
+    if not os.path.exists(opifacts_path):
+        try:
+            os.makedirs(opifacts_path, exist_ok=True)
+            print(f"Created '{config['OPIFACTS_SUBFOLDER']}' folder in your repository.")
+        except Exception as e:
+            print(f"Warning: Could not create '{config['OPIFACTS_SUBFOLDER']}' folder: {e}")
+    
+    # Ask about installing to bin directory
+    bin_dirs = get_bin_directories()
+    if bin_dirs:
+        install_choice = input("\nWould you like to install 'opifacts' to your PATH? (y/n): ").strip().lower()
+        if install_choice == 'y':
+            print("\nAvailable installation locations:")
+            for i, (path, needs_sudo) in enumerate(bin_dirs, 1):
+                sudo_note = " (requires sudo)" if needs_sudo else ""
+                print(f"{i}. {path}{sudo_note}")
+            
+            while True:
+                try:
+                    choice = input("\nSelect installation location (number) or 'n' to skip: ").strip()
+                    if choice.lower() == 'n':
+                        break
+                        
+                    choice_idx = int(choice) - 1
+                    if 0 <= choice_idx < len(bin_dirs):
+                        bin_dir, needs_sudo = bin_dirs[choice_idx]
+                        install_script(bin_dir, needs_sudo)
+                        break
+                    else:
+                        print(f"Please enter a number between 1 and {len(bin_dirs)}")
+                except ValueError:
+                    print("Please enter a valid number or 'n'")
+    
+    config["setup_completed"] = True
+    save_config(config)
+    
+    print("\nSetup completed! You can now use OpiFacts to upload files.")
+    print(f"Run: ./opifacts.py file1.txt folder1 ...")
+    print(f"Or (if installed to PATH): opifacts file1.txt folder1 ...")
+    
+    return config
 
 def create_hash_folder():
-    """Create a folder name based on current time hash"""
+    """Create a folder name based on current time hash inside the opifacts folder"""
     timestamp = str(time.time() * 100)  # Time to 100th of a second
     hash_obj = hashlib.md5(timestamp.encode())
     folder_name = hash_obj.hexdigest()
     
-    # Create the folder in the repo
-    folder_path = os.path.join(GITHUB_REPO_PATH, folder_name)
+    # Create the opifacts folder if it doesn't exist
+    opifacts_path = os.path.join(CONFIG["GITHUB_REPO_PATH"], CONFIG["OPIFACTS_SUBFOLDER"])
+    os.makedirs(opifacts_path, exist_ok=True)
+    
+    # Create the hash folder inside opifacts
+    folder_path = os.path.join(opifacts_path, folder_name)
     os.makedirs(folder_path, exist_ok=True)
     
-    return folder_path
+    return folder_path, folder_name
 
 def ensure_ssh_remote():
     """Ensure the repository is using SSH for the remote URL"""
     try:
         # Get the current remote URL
-        os.chdir(GITHUB_REPO_PATH)
+        os.chdir(CONFIG["GITHUB_REPO_PATH"])
         result = subprocess.run(
             ["git", "remote", "get-url", "origin"], 
             capture_output=True, 
@@ -59,7 +227,7 @@ def ensure_ssh_remote():
         
         print(f"Warning: Could not automatically convert remote URL: {current_url}")
         print("Please manually set your remote to use SSH with:")
-        print(f"  git remote set-url origin git@github.com:{GITHUB_USERNAME}/reponame.git")
+        print(f"  git remote set-url origin git@github.com:{CONFIG['GITHUB_USERNAME']}/reponame.git")
         return False
     except subprocess.CalledProcessError as e:
         print(f"Error checking/updating remote URL: {e}")
@@ -100,12 +268,12 @@ def ensure_ssh_agent():
 
 def copy_files_to_repo(sources):
     """Copy files or folder contents to the repo in a new hash folder"""
-    if not os.path.exists(GITHUB_REPO_PATH):
-        print(f"Error: Repository path {GITHUB_REPO_PATH} does not exist")
+    if not os.path.exists(CONFIG["GITHUB_REPO_PATH"]):
+        print(f"Error: Repository path {CONFIG['GITHUB_REPO_PATH']} does not exist")
         sys.exit(1)
         
-    # Create a new folder with hash name
-    dest_folder = create_hash_folder()
+    # Create a new folder with hash name inside opifacts folder
+    dest_folder, folder_hash = create_hash_folder()
     print(f"Created folder: {dest_folder}")
     
     # Process each source
@@ -129,7 +297,7 @@ def copy_files_to_repo(sources):
     # Push changes to GitHub
     try:
         # Change to repo directory
-        os.chdir(GITHUB_REPO_PATH)
+        os.chdir(CONFIG["GITHUB_REPO_PATH"])
         
         # Check SSH configuration
         ssh_remote_ok = ensure_ssh_remote()
@@ -140,12 +308,12 @@ def copy_files_to_repo(sources):
             print("Changes committed locally but not pushed to GitHub.")
             # Still commit locally even if we can't push
             subprocess.run(["git", "add", "."], check=True)
-            subprocess.run(["git", "commit", "-m", f"Add files to {os.path.basename(dest_folder)}"], check=True)
+            subprocess.run(["git", "commit", "-m", f"Add files to {CONFIG['OPIFACTS_SUBFOLDER']}/{os.path.basename(dest_folder)}"], check=True)
             return
         
         # Git commands
         subprocess.run(["git", "add", "."], check=True)
-        subprocess.run(["git", "commit", "-m", f"Add files to {os.path.basename(dest_folder)}"], check=True)
+        subprocess.run(["git", "commit", "-m", f"Add files to {CONFIG['OPIFACTS_SUBFOLDER']}/{os.path.basename(dest_folder)}"], check=True)
         
         # Test SSH connection to GitHub before pushing
         print("Testing SSH connection to GitHub...")
@@ -168,19 +336,25 @@ def copy_files_to_repo(sources):
         # Push with SSH
         subprocess.run(["git", "push"], check=True)
         print("Successfully pushed changes to GitHub using SSH key")
+        
+        # Print the public URL
+        public_url = f"{CONFIG['WEBSITE_URL']}/{CONFIG['OPIFACTS_SUBFOLDER']}/{folder_hash}"
+        print("\nFiles are now available at:")
+        print(public_url)
+        
     except subprocess.CalledProcessError as e:
         print(f"Error during git operations: {e}")
         sys.exit(1)
 
 def update_repo():
     """Pull the latest changes from the GitHub repository"""
-    if not os.path.exists(GITHUB_REPO_PATH):
-        print(f"Error: Repository path {GITHUB_REPO_PATH} does not exist")
+    if not os.path.exists(CONFIG["GITHUB_REPO_PATH"]):
+        print(f"Error: Repository path {CONFIG['GITHUB_REPO_PATH']} does not exist")
         sys.exit(1)
         
     try:
         # Change to repo directory
-        os.chdir(GITHUB_REPO_PATH)
+        os.chdir(CONFIG["GITHUB_REPO_PATH"])
         
         # Ensure SSH is configured properly
         ensure_ssh_remote()
@@ -194,10 +368,29 @@ def update_repo():
         sys.exit(1)
 
 def main():
+    global CONFIG
+    
+    # Check if setup is needed
+    if len(sys.argv) > 1 and sys.argv[1] == "setup":
+        CONFIG = guided_setup()
+        return
+    
+    # Check if setup is completed
+    if not CONFIG["setup_completed"]:
+        print("OpiFacts hasn't been set up yet.")
+        user_input = input("Would you like to run the setup now? (y/n): ")
+        if user_input.lower() == 'y':
+            CONFIG = guided_setup()
+        else:
+            print("Setup aborted. Please run './opifacts.py setup' when you're ready.")
+            sys.exit(1)
+        return
+
     if len(sys.argv) < 2:
         print("Usage:")
-        print("  opifact <file1> <file2> ... <folder1> ...")
-        print("  opifact update")
+        print("  ./opifacts.py <file1> <file2> ... <folder1> ...")
+        print("  ./opifacts.py update")
+        print("  ./opifacts.py setup")
         sys.exit(1)
         
     if sys.argv[1] == "update":
