@@ -14,7 +14,12 @@ SETUP INSTRUCTIONS:
    or, if installed to PATH:
    opifacts file1.txt folder1 file2.jpg ...
 
-4. To update your repository:
+4. To pull the latest changes from your repository:
+   ./opifacts.py pull
+   or:
+   opifacts pull
+
+5. To update the OpiFacts script itself:
    ./opifacts.py update
    or:
    opifacts update
@@ -31,6 +36,7 @@ import time
 import hashlib
 import subprocess
 import json
+import urllib.request
 from pathlib import Path
 
 # Configuration - these will be set during first-time setup
@@ -40,6 +46,8 @@ DEFAULT_CONFIG = {
     "GITHUB_USERNAME": "",         # Your GitHub username
     "WEBSITE_URL": "",             # Your website URL (e.g., https://abenaws.dev)
     "OPIFACTS_SUBFOLDER": "opifacts",  # Subfolder name within the repo for uploaded content
+    "SCRIPT_LOCATION": "",         # Where the script is installed (set during installation)
+    "SCRIPT_UPDATE_URL": "https://raw.githubusercontent.com/AbeNaws/OpiFacts/main/opifacts", # Update source
     "setup_completed": False       # Flag to track if setup has been completed
 }
 
@@ -96,11 +104,66 @@ def install_script(bin_dir, needs_sudo):
             shutil.copy2(current_script, destination)
             os.chmod(destination, 0o755)  # Make executable
         
+        # Save the installation location to config
+        CONFIG["SCRIPT_LOCATION"] = destination
+        save_config(CONFIG)
+        
         print(f"Successfully installed 'opifacts' to {bin_dir}")
         print("You can now run the script using just 'opifacts' command")
         return True
     except Exception as e:
         print(f"Error installing script: {e}")
+        return False
+
+def update_script():
+    """Update the OpiFacts script to the latest version"""
+    script_location = CONFIG.get("SCRIPT_LOCATION", "")
+    update_url = CONFIG.get("SCRIPT_UPDATE_URL", "")
+    
+    if not script_location or not os.path.exists(script_location):
+        print("Error: Can't determine script location for update.")
+        script_location = os.path.abspath(sys.argv[0])
+        print(f"Attempting to update current script at: {script_location}")
+    
+    if not update_url:
+        print("Error: Update URL not configured.")
+        print("Please set the SCRIPT_UPDATE_URL in your config file (~/.opifacts_config.json)")
+        return False
+    
+    print(f"Updating OpiFacts from: {update_url}")
+    print(f"Current script location: {script_location}")
+    
+    try:
+        # Check if we need sudo
+        needs_sudo = not os.access(os.path.dirname(script_location), os.W_OK)
+        
+        # Create temporary file for download
+        temp_file = os.path.join(os.path.dirname(script_location), ".opifacts.new")
+        
+        # Download the latest version
+        print("Downloading latest version...")
+        urllib.request.urlretrieve(update_url, temp_file)
+        
+        # Make it executable
+        os.chmod(temp_file, 0o755)
+        
+        # Replace the current script
+        if needs_sudo:
+            print("Updating script (requires sudo)...")
+            subprocess.run(["sudo", "mv", temp_file, script_location], check=True)
+        else:
+            print("Updating script...")
+            shutil.move(temp_file, script_location)
+        
+        print("OpiFacts has been successfully updated!")
+        return True
+    except Exception as e:
+        print(f"Error updating script: {e}")
+        if os.path.exists(temp_file):
+            try:
+                os.remove(temp_file)
+            except:
+                pass
         return False
 
 def guided_setup():
@@ -130,6 +193,13 @@ def guided_setup():
             break
         else:
             print("Error: URL must start with http:// or https://")
+    
+    # Script update URL
+    update_url = input(f"Enter the URL for script updates (press Enter for default: {DEFAULT_CONFIG['SCRIPT_UPDATE_URL']}): ").strip()
+    if update_url:
+        config["SCRIPT_UPDATE_URL"] = update_url
+    else:
+        config["SCRIPT_UPDATE_URL"] = DEFAULT_CONFIG["SCRIPT_UPDATE_URL"]
     
     # Create opifacts subfolder in the repository if it doesn't exist
     opifacts_path = os.path.join(config["GITHUB_REPO_PATH"], config["OPIFACTS_SUBFOLDER"])
@@ -346,7 +416,7 @@ def copy_files_to_repo(sources):
         print(f"Error during git operations: {e}")
         sys.exit(1)
 
-def update_repo():
+def pull_repo():
     """Pull the latest changes from the GitHub repository"""
     if not os.path.exists(CONFIG["GITHUB_REPO_PATH"]):
         print(f"Error: Repository path {CONFIG['GITHUB_REPO_PATH']} does not exist")
@@ -362,7 +432,7 @@ def update_repo():
         # Git pull
         subprocess.run(["git", "pull"], check=True)
         
-        print("Successfully updated the repository")
+        print("Successfully pulled the latest changes from the repository")
     except subprocess.CalledProcessError as e:
         print(f"Error during git operations: {e}")
         sys.exit(1)
@@ -389,12 +459,15 @@ def main():
     if len(sys.argv) < 2:
         print("Usage:")
         print("  ./opifacts.py <file1> <file2> ... <folder1> ...")
-        print("  ./opifacts.py update")
-        print("  ./opifacts.py setup")
+        print("  ./opifacts.py pull       (pull latest changes from repository)")
+        print("  ./opifacts.py update     (update the OpiFacts script)")
+        print("  ./opifacts.py setup      (run setup again)")
         sys.exit(1)
         
-    if sys.argv[1] == "update":
-        update_repo()
+    if sys.argv[1] == "pull":
+        pull_repo()
+    elif sys.argv[1] == "update":
+        update_script()
     else:
         # Files/folders to copy are all arguments
         sources = sys.argv[1:]
