@@ -60,9 +60,11 @@ def copy_files_to_repo(sources):
         subprocess.run(["git", "commit", "-m", f"Add files to {os.path.basename(dest_folder)}"], check=True)
         
         # Use SSH for pushing (assumes SSH key is properly set up)
-        env = os.environ.copy()
-        env["GIT_SSH_COMMAND"] = "ssh -i ~/.ssh/github_key -o IdentitiesOnly=yes"
-        subprocess.run(["git", "push"], check=True, env=env)
+        # To set up SSH keys:
+        # 1. Generate a new SSH key: ssh-keygen -t ed25519 -C "your_email@example.com"
+        # 2. Add the SSH key to the ssh-agent: eval "$(ssh-agent -s)" and ssh-add ~/.ssh/id_ed25519
+        # 3. Add the SSH key to your GitHub account: Copy the contents of ~/.ssh/id_ed25519.pub and add it to your GitHub SSH keys
+        subprocess.run(["git", "push"], check=True)
         
         print("Successfully pushed changes to GitHub using SSH key")
     except subprocess.CalledProcessError as e:
